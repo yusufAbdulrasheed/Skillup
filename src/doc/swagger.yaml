@@ -1,0 +1,409 @@
+openapi: 3.0.0
+info:
+  title: SkillUp API
+  description: API documentation for the SkillUp project
+  version: 1.0.0
+
+servers:
+  - url: http://localhost:7777/
+    description: Local server
+
+paths:
+  # Authentication endpoints - Accessible by ALL users (no auth required)
+  /api/v1/auth/register:
+    post:
+      summary: Register a new user
+      description: Creates a new user account. No authentication required.
+      tags:
+        - Authentication
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - username
+                - email
+                - password
+              properties:
+                username:
+                  type: string
+                  description: User's username
+                  example: "john_doe"
+                email:
+                  type: string
+                  format: email
+                  description: User's email address
+                  example: "john@example.com"
+                password:
+                  type: string
+                  format: password
+                  description: User's password
+                  example: "securePassword123"
+      responses:
+        '201':
+          description: User registered successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: "User registered successfully"
+                  userId:
+                    type: string
+                    example: "64f8a9b2c1234567890abcde"
+        '400':
+          description: Bad request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/v1/auth/login:
+    post:
+      summary: Login user
+      description: Authenticate user with email and password. No prior authentication required.
+      tags:
+        - Authentication
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - email
+                - password
+              properties:
+                email:
+                  type: string
+                  format: email
+                  description: User's email address
+                  example: "john@example.com"
+                password:
+                  type: string
+                  format: password
+                  description: User's password
+                  example: "securePassword123"
+      responses:
+        '200':
+          description: User logged in successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: "Login successful"
+                  token:
+                    type: string
+                    example: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+                  user:
+                    $ref: '#/components/schemas/User'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  # Admin endpoints - ONLY accessible by ADMIN users (authentication + authorization required)
+  /api/v1/admin/approve-instructor/{instructorId}:
+    put:
+      summary: Approve an instructor
+      description: |
+        **ADMIN ONLY ENDPOINT** - Approve an instructor by changing their status from 'pending' to 'approved'.
+        
+        **Authentication Required:** YES - JWT token required
+        **Authorization Required:** YES - Admin role only
+        
+        **Access Control:**
+        - Must provide valid JWT token in Authorization header
+        - Token must belong to a user with 'admin' role
+        - Non-admin users will receive 403 Forbidden
+        
+        **Process:**
+        1. Validates the JWT token
+        2. Checks if user has admin role
+        3. Finds the instructor by ID
+        4. Validates that the user is indeed an instructor
+        5. Updates the instructor's status to 'approved'
+      tags:
+        - Admin
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: instructorId
+          in: path
+          required: true
+          description: The unique identifier of the instructor to approve
+          schema:
+            type: string
+            example: "64f8a9b2c1234567890abcde"
+      responses:
+        '200':
+          description: Instructor approved successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessResponse'
+              example:
+                message: "Instructor approved Successfully"
+                instructor:
+                  _id: "64f8a9b2c1234567890abcde"
+                  username: "john_instructor"
+                  email: "john@example.com"
+                  role: "instructor"
+                  status: "approved"
+                  createdAt: "2023-09-06T10:30:00.000Z"
+                  updatedAt: "2023-09-06T11:45:00.000Z"
+        
+        '400':
+          description: Bad request - User is not an instructor
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                message: "User is not an instructor"
+        
+        '401':
+          description: Unauthorized - Invalid or missing token
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: false
+                  msg:
+                    type: string
+                    example: "Invalid Token"
+        
+        '403':
+          description: Forbidden - Access denied (not admin or no token)
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: false
+                  msg:
+                    type: string
+                    example: "A token is required for authentication"
+                  message:
+                    type: string
+                    example: "Forbiden: Access Denied"
+        
+        '404':
+          description: Instructor not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                message: "Instructor not found"
+        
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: "Server error"
+                  error:
+                    type: string
+                    example: "Database connection failed"
+
+  /api/v1/admin/reject-instructor/{instructorId}:
+    put:
+      summary: Reject an instructor
+      description: |
+        **ADMIN ONLY ENDPOINT** - Reject an instructor by changing their status from 'pending' or 'approved' to 'reject'.
+        
+        **Authentication Required:** YES - JWT token required
+        **Authorization Required:** YES - Admin role only
+        
+        **Access Control:**
+        - Must provide valid JWT token in Authorization header
+        - Token must belong to a user with 'admin' role
+        - Non-admin users will receive 403 Forbidden
+        
+        **Process:**
+        1. Validates the JWT token
+        2. Checks if user has admin role
+        3. Finds the instructor by ID
+        4. Validates that the user is indeed an instructor
+        5. Updates the instructor's status to 'rejected'
+      tags:
+        - Admin
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: instructorId
+          in: path
+          required: true
+          description: The unique identifier of the instructor to reject
+          schema:
+            type: string
+            example: "64f8a9b2c1234567890abcde"
+      responses:
+        '200':
+          description: Instructor rejected successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessResponse'
+              example:
+                message: "Instructor rejected Successfully"
+                instructor:
+                  _id: "64f8a9b2c1234567890abcde"
+                  username: "john_instructor"
+                  email: "john@example.com"
+                  role: "instructor"
+                  status: "rejected"
+                  createdAt: "2023-09-06T10:30:00.000Z"
+                  updatedAt: "2023-09-06T11:45:00.000Z"
+        
+        '400':
+          description: Bad request - User is not an instructor
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                message: "User is not an instructor"
+        
+        '401':
+          description: Unauthorized - Invalid or missing token
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: false
+                  msg:
+                    type: string
+                    example: "Invalid Token"
+        
+        '403':
+          description: Forbidden - Access denied (not admin or no token)
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: false
+                  msg:
+                    type: string
+                    example: "A token is required for authentication"
+                  message:
+                    type: string
+                    example: "Forbiden: Access Denied"
+        
+        '404':
+          description: Instructor not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                message: "Instructor not found"
+        
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: "Server error"
+                  error:
+                    type: string
+                    example: "Database connection failed"
+
+
+components:
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: JWT token for authentication. Format: "Bearer <token>"
+
+  schemas:
+    User:
+      type: object
+      properties:
+        _id:
+          type: string
+          description: User's unique identifier
+          example: "64f8a9b2c1234567890abcde"
+        username:
+          type: string
+          description: User's username
+          example: "john_instructor"
+        email:
+          type: string
+          format: email
+          description: User's email address
+          example: "john@example.com"
+        role:
+          type: string
+          enum: [student, instructor, admin]
+          description: User's role in the system
+          example: "instructor"
+        status:
+          type: string
+          enum: [pending, approved, rejected, suspended]
+          description: User's status in the system
+          example: "approved"
+        createdAt:
+          type: string
+          format: date-time
+          description: Account creation timestamp
+        updatedAt:
+          type: string
+          format: date-time
+          description: Last update timestamp
+
+    ErrorResponse:
+      type: object
+      properties:
+        message:
+          type: string
+          description: Error message
+        error:
+          type: string
+          description: Detailed error information (optional)
+
+    SuccessResponse:
+      type: object
+      properties:
+        message:
+          type: string
+          description: Success message
+        instructor:
+          $ref: '#/components/schemas/User'
+
+tags:
+  - name: Authentication
+    description: Public authentication endpoints - accessible by all users (no auth required)
+  - name: Admin
+    description: Admin-only endpoints - requires authentication and admin role
