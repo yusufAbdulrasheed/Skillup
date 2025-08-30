@@ -5,12 +5,12 @@ info:
   version: 1.0.0
 
 servers:
-  - url: http://localhost:7777/
+  - url: http://localhost:7777/api/v1
     description: Local server
 
 paths:
   # Authentication endpoints - Accessible by ALL users (no auth required)
-  /api/v1/auth/register:
+  /auth/register:
     post:
       summary: Register a new user
       description: Creates a new user account. No authentication required.
@@ -23,14 +23,15 @@ paths:
             schema:
               type: object
               required:
-                - username
+                - name
                 - email
                 - password
+                - role
               properties:
-                username:
+                name:
                   type: string
-                  description: User's username
-                  example: "john_doe"
+                  description: User's full name
+                  example: "John Doe"
                 email:
                   type: string
                   format: email
@@ -39,8 +40,13 @@ paths:
                 password:
                   type: string
                   format: password
-                  description: User's password
+                  description: User's password (will be hashed)
                   example: "securePassword123"
+                role:
+                  type: string
+                  enum: [student, instructor, admin]
+                  description: User's role in the system
+                  example: "student"
       responses:
         '201':
           description: User registered successfully
@@ -49,20 +55,33 @@ paths:
               schema:
                 type: object
                 properties:
-                  message:
+                  success:
+                    type: boolean
+                    example: true
+                  msg:
                     type: string
                     example: "User registered successfully"
-                  userId:
-                    type: string
-                    example: "64f8a9b2c1234567890abcde"
-        '400':
-          description: Bad request
+        '401':
+          description: User already exists
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ErrorResponse'
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: false
+                  msg:
+                    type: string
+                    example: "User already exists"
+        '500':
+          description: Server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ServerErrorResponse'
 
-  /api/v1/auth/login:
+  /auth/login:
     post:
       summary: Login user
       description: Authenticate user with email and password. No prior authentication required.
@@ -96,6 +115,9 @@ paths:
               schema:
                 type: object
                 properties:
+                  success:
+                    type: boolean
+                    example: true
                   message:
                     type: string
                     example: "Login successful"
@@ -103,35 +125,49 @@ paths:
                     type: string
                     example: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
                   user:
-                    $ref: '#/components/schemas/User'
+                    $ref: '#/components/schemas/UserResponse'
         '401':
-          description: Unauthorized
+          description: Invalid credentials
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ErrorResponse'
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: false
+                  message:
+                    type: string
+                    example: "Invalid email or password"
+        '500':
+          description: Server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ServerErrorResponse'
+
+  /auth/logout:
+    post:
+      summary: Logout user
+      description: Logout user (placeholder endpoint)
+      tags:
+        - Authentication
+      responses:
+        '200':
+          description: User logged out successfully
+        '500':
+          description: Server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ServerErrorResponse'
 
   # Admin endpoints - ONLY accessible by ADMIN users (authentication + authorization required)
-  /api/v1/admin/approve-instructor/{instructorId}:
+  /admin/approve-instructor/{instructorId}:
     put:
       summary: Approve an instructor
       description: |
         **ADMIN ONLY ENDPOINT** - Approve an instructor by changing their status from 'pending' to 'approved'.
-        
-        **Authentication Required:** YES - JWT token required
-        **Authorization Required:** YES - Admin role only
-        
-        **Access Control:**
-        - Must provide valid JWT token in Authorization header
-        - Token must belong to a user with 'admin' role
-        - Non-admin users will receive 403 Forbidden
-        
-        **Process:**
-        1. Validates the JWT token
-        2. Checks if user has admin role
-        3. Finds the instructor by ID
-        4. Validates that the user is indeed an instructor
-        5. Updates the instructor's status to 'approved'
       tags:
         - Admin
       security:
@@ -150,101 +186,43 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/SuccessResponse'
-              example:
-                message: "Instructor approved Successfully"
-                instructor:
-                  _id: "64f8a9b2c1234567890abcde"
-                  username: "john_instructor"
-                  email: "john@example.com"
-                  role: "instructor"
-                  status: "approved"
-                  createdAt: "2023-09-06T10:30:00.000Z"
-                  updatedAt: "2023-09-06T11:45:00.000Z"
-        
+                $ref: '#/components/schemas/InstructorSuccessResponse'
         '400':
-          description: Bad request - User is not an instructor
+          description: User is not an instructor
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
-              example:
-                message: "User is not an instructor"
-        
         '401':
-          description: Unauthorized - Invalid or missing token
+          description: Unauthorized
           content:
             application/json:
               schema:
-                type: object
-                properties:
-                  success:
-                    type: boolean
-                    example: false
-                  msg:
-                    type: string
-                    example: "Invalid Token"
-        
+                $ref: '#/components/schemas/AuthErrorResponse'
         '403':
-          description: Forbidden - Access denied (not admin or no token)
+          description: Forbidden - Admin access required
           content:
             application/json:
               schema:
-                type: object
-                properties:
-                  success:
-                    type: boolean
-                    example: false
-                  msg:
-                    type: string
-                    example: "A token is required for authentication"
-                  message:
-                    type: string
-                    example: "Forbiden: Access Denied"
-        
+                $ref: '#/components/schemas/AuthErrorResponse'
         '404':
           description: Instructor not found
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
-              example:
-                message: "Instructor not found"
-        
         '500':
-          description: Internal server error
+          description: Server error
           content:
             application/json:
               schema:
-                type: object
-                properties:
-                  message:
-                    type: string
-                    example: "Server error"
-                  error:
-                    type: string
-                    example: "Database connection failed"
+                $ref: '#/components/schemas/ServerErrorResponse'
 
-  /api/v1/admin/reject-instructor/{instructorId}:
+  /admin/reject-instructor/{instructorId}:
     put:
       summary: Reject an instructor
       description: |
-        **ADMIN ONLY ENDPOINT** - Reject an instructor by changing their status from 'pending' or 'approved' to 'reject'.
-        
-        **Authentication Required:** YES - JWT token required
-        **Authorization Required:** YES - Admin role only
-        
-        **Access Control:**
-        - Must provide valid JWT token in Authorization header
-        - Token must belong to a user with 'admin' role
-        - Non-admin users will receive 403 Forbidden
-        
-        **Process:**
-        1. Validates the JWT token
-        2. Checks if user has admin role
-        3. Finds the instructor by ID
-        4. Validates that the user is indeed an instructor
-        5. Updates the instructor's status to 'rejected'
+        **ADMIN ONLY ENDPOINT** - Reject an instructor by changing their status from 'pending' to 'rejected'.
       tags:
         - Admin
       security:
@@ -263,69 +241,113 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/SuccessResponse'
-              example:
-                message: "Instructor rejected Successfully"
-                instructor:
-                  _id: "64f8a9b2c1234567890abcde"
-                  username: "john_instructor"
-                  email: "john@example.com"
-                  role: "instructor"
-                  status: "rejected"
-                  createdAt: "2023-09-06T10:30:00.000Z"
-                  updatedAt: "2023-09-06T11:45:00.000Z"
-        
+                $ref: '#/components/schemas/InstructorSuccessResponse'
         '400':
-          description: Bad request - User is not an instructor
+          description: User is not an instructor
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
-              example:
-                message: "User is not an instructor"
-        
         '401':
-          description: Unauthorized - Invalid or missing token
+          description: Unauthorized
           content:
             application/json:
               schema:
-                type: object
-                properties:
-                  success:
-                    type: boolean
-                    example: false
-                  msg:
-                    type: string
-                    example: "Invalid Token"
-        
+                $ref: '#/components/schemas/AuthErrorResponse'
         '403':
-          description: Forbidden - Access denied (not admin or no token)
+          description: Forbidden - Admin access required
           content:
             application/json:
               schema:
-                type: object
-                properties:
-                  success:
-                    type: boolean
-                    example: false
-                  msg:
-                    type: string
-                    example: "A token is required for authentication"
-                  message:
-                    type: string
-                    example: "Forbiden: Access Denied"
-        
+                $ref: '#/components/schemas/AuthErrorResponse'
         '404':
           description: Instructor not found
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
-              example:
-                message: "Instructor not found"
-        
         '500':
-          description: Internal server error
+          description: Server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ServerErrorResponse'
+
+  /admin/block-student/{studentId}:
+    put:
+      summary: Block a student
+      description: |
+        **ADMIN ONLY ENDPOINT** - Block a student by setting their isBlocked status to true and sending a notification email.
+      tags:
+        - Admin
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: studentId
+          in: path
+          required: true
+          description: The unique identifier of the student to block
+          schema:
+            type: string
+            example: "64f8a9b2c1234567890abcde"
+      responses:
+        '200':
+          description: Student blocked successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StudentSuccessResponse'
+        '400':
+          description: User is not a student
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthErrorResponse'
+        '403':
+          description: Forbidden - Admin access required
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthErrorResponse'
+        '404':
+          description: Student not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: Server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ServerErrorResponse'
+
+  /admin/approve-course/{courseId}:
+    put:
+      summary: Approve a course
+      description: |
+        **ADMIN ONLY ENDPOINT** - Approve a course by changing its status to 'approved'.
+      tags:
+        - Admin
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: courseId
+          in: path
+          required: true
+          description: The unique identifier of the course to approve
+          schema:
+            type: string
+            example: "64f8a9b2c1234567890abcde"
+      responses:
+        '200':
+          description: Course approved successfully
           content:
             application/json:
               schema:
@@ -333,12 +355,3137 @@ paths:
                 properties:
                   message:
                     type: string
-                    example: "Server error"
+                    example: "Course approved successfully"
+                  course:
+                    $ref: '#/components/schemas/Course'
+        '404':
+          description: Course not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthErrorResponse'
+        '403':
+          description: Forbidden - Admin access required
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthErrorResponse'
+        '500':
+          description: Server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ServerErrorResponse'
+
+  /admin/reject-course/{courseId}:
+    put:
+      summary: Reject a course
+      description: |
+        **ADMIN ONLY ENDPOINT** - Reject a course by changing its status to 'rejected'.
+      tags:
+        - Admin
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: courseId
+          in: path
+          required: true
+          description: The unique identifier of the course to reject
+          schema:
+            type: string
+            example: "64f8a9b2c1234567890abcde"
+      responses:
+        '200':
+          description: Course rejected successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: "Course rejected successfully"
+                  course:
+                    $ref: '#/components/schemas/Course'
+        '404':
+          description: Course not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthErrorResponse'
+        '403':
+          description: Forbidden - Admin access required
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthErrorResponse'
+        '500':
+          description: Server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ServerErrorResponse'
+
+  /admin/enrollments:
+    get:
+      summary: View all enrollments
+      description: |
+        **ADMIN ONLY ENDPOINT** - Retrieve all course enrollments in the system.
+      tags:
+        - Admin
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: Enrollments retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  message:
+                    type: string
+                    example: "Enrollments retrieved successfully"
+                  enrollments:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Enrollment'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthErrorResponse'
+        '403':
+          description: Forbidden - Admin access required
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthErrorResponse'
+        '500':
+          description: Server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ServerErrorResponse'
+
+  /admin/reviews:
+    get:
+      summary: View all reviews
+      description: |
+        **ADMIN ONLY ENDPOINT** - Retrieve all course reviews in the system.
+      tags:
+        - Admin
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: Reviews retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  message:
+                    type: string
+                    example: "Reviews retrieved successfully"
+                  reviews:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Review'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthErrorResponse'
+        '403':
+          description: Forbidden - Admin access required
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthErrorResponse'
+        '500':
+          description: Server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ServerErrorResponse'
+    
+  # Student endpoints - ONLY accessible by Student users (authentication + authorization required)
+  /student/update-profile:
+    put:
+      summary: Update student profile and upload avatar
+      description: Allows a student to update their personal info and upload an avatar (image). The upload will be handled by Cloudinary.
+      tags:
+        - Student
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              properties:
+                name:
+                  type: string
+                  example: Yusuf Abdulrasheed
+                email:
+                  type: string
+                  format: email
+                  example: yusufabdulrasheed@email.com
+                bio:
+                  type: string
+                  example: i am a begnner in web development
+                avatar:
+                  type: string
+                  format: binary
+                  description: The image file to upload (PNG, JPG, JPEG)
+      responses:
+        '200':
+          description: Student profile updated successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  message:
+                    type: string
+                    example: Profile updated successfully
+                  data:
+                    type: object
+                    properties:
+                      name:
+                        type: string
+                        example: Yusuf Abdulrasheed
+                      email:
+                        type: string
+                        example: yusufabdulrasheed@email.com
+                      avatar:
+                        type: string
+                        example: https://res.cloudinary.com/your-cloud-name/image/upload/v1723456789/avatar.png
+        '400':
+          description: Bad request or missing file
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: Unauthorized — token missing or invalid
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthErrorResponse'
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ServerErrorResponse'
+                
+  /student/enrolled-courses:
+    get:
+      summary: Get student's enrolled courses
+      description: |
+        **STUDENT ONLY ENDPOINT** - Retrieve all courses that the authenticated student is enrolled in with course details.
+      tags:
+        - Student
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: Enrolled courses retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  count:
+                    type: integer
+                    description: Number of enrolled courses
+                    example: 3
+                  courses:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        _id:
+                          type: string
+                          description: Course unique identifier
+                          example: "64f8a9b2c1234567890abcde"
+                        title:
+                          type: string
+                          description: Course title
+                          example: "Introduction to JavaScript"
+                        description:
+                          type: string
+                          description: Course description
+                          example: "Learn the fundamentals of JavaScript programming"
+                        category:
+                          type: string
+                          description: Course category
+                          example: "Programming"
+                        thumbnail:
+                          type: string
+                          description: Course thumbnail image URL
+                          example: "https://res.cloudinary.com/your-cloud-name/image/upload/v1723456789/course-thumbnail.jpg"
+                        instructor:
+                          type: string
+                          description: Instructor's user ID
+                          example: "64f8a9b2c1234567890abcdf"
+                        lesson:
+                          type: integer
+                          description: Number of lessons in the course
+                          example: 15
+                        price:
+                          type: number
+                          description: Course price
+                          example: 99.99
+                        isPublished:
+                          type: boolean
+                          description: Whether the course is published
+                          example: true
+        '404':
+          description: No enrolled courses found
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: false
+                  message:
+                    type: string
+                    example: "You have not enrolled in any course yet"
+        '401':
+          description: Unauthorized - token missing or invalid
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthErrorResponse'
+        '403':
+          description: Forbidden - Student access required
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthErrorResponse'
+        '500':
+          description: Server error
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: "Server Error"
+                  error:
+                    type: string
+                    example: "Database connection failed"
+                  
+  /student/track-lesson-progress/{lessonId}:
+    post:
+      summary: Track lesson progress
+      description: |
+        **STUDENT ONLY ENDPOINT** - Update the completion status of a specific lesson for the authenticated student. Student must be enrolled in the course containing the lesson.
+      tags:
+        - Student
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: lessonId
+          in: path
+          required: true
+          description: The unique identifier of the lesson to track progress for
+          schema:
+            type: string
+            example: "64f8a9b2c1234567890abcde"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - completed
+              properties:
+                completed:
+                  type: boolean
+                  description: Whether the lesson is completed or not
+                  example: true
+      responses:
+        '200':
+          description: Lesson progress updated successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  message:
+                    type: string
+                    example: "Lesson progress updated successfully"
+                  data:
+                    type: object
+                    properties:
+                      _id:
+                        type: string
+                        description: Lesson progress unique identifier
+                        example: "64f8a9b2c1234567890abcde"
+                      student:
+                        type: string
+                        description: Student's user ID
+                        example: "64f8a9b2c1234567890abcdf"
+                      course:
+                        type: string
+                        description: Course ID
+                        example: "64f8a9b2c1234567890abcdg"
+                      lesson:
+                        type: string
+                        description: Lesson ID
+                        example: "64f8a9b2c1234567890abcdh"
+                      completed:
+                        type: boolean
+                        description: Lesson completion status
+                        example: true
+                      createdAt:
+                        type: string
+                        format: date-time
+                        description: Progress record creation timestamp
+                        example: "2024-08-23T10:30:00.000Z"
+                      updatedAt:
+                        type: string
+                        format: date-time
+                        description: Progress record last update timestamp
+                        example: "2024-08-23T10:30:00.000Z"
+        '400':
+          description: Bad request - lesson already marked as completed or invalid data
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: false
+                  message:
+                    type: string
+                    example: "Lesson already marked as completed"
+        '401':
+          description: Unauthorized - token missing or invalid
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthErrorResponse'
+        '403':
+          description: Forbidden - Student not enrolled in the course or student access required
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: false
+                  message:
+                    type: string
+                    example: "You are not enrolled in this course"
+        '404':
+          description: Lesson not found
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: false
+                  message:
+                    type: string
+                    example: "lesson not found"
+        '500':
+          description: Server error
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: "Server Error"
                   error:
                     type: string
                     example: "Database connection failed"
 
+  /student/submit-review/{courseId}:
+    post:
+      summary: Submit a course review
+      description: |
+        **STUDENT ONLY ENDPOINT** - Submit a review and rating for a course. Student must be enrolled in the course and can only submit one review per course.
+      tags:
+        - Student
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: courseId
+          in: path
+          required: true
+          description: The unique identifier of the course to review
+          schema:
+            type: string
+            example: "64f8a9b2c1234567890abcde"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - rating
+                - comment
+              properties:
+                rating:
+                  type: number
+                  minimum: 1
+                  maximum: 5
+                  description: Rating for the course (1-5 scale)
+                  example: 4.5
+                comment:
+                  type: string
+                  description: Review comment/feedback for the course
+                  example: "Great course! Very informative and well-structured."
+      responses:
+        '201':
+          description: Review submitted successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  message:
+                    type: string
+                    example: "Review Submitted successfully"
+                  data:
+                    type: object
+                    properties:
+                      _id:
+                        type: string
+                        description: Review unique identifier
+                        example: "64f8a9b2c1234567890abcde"
+                      course:
+                        type: string
+                        description: Course ID being reviewed
+                        example: "64f8a9b2c1234567890abcdf"
+                      student:
+                        type: string
+                        description: Student's user ID who submitted the review
+                        example: "64f8a9b2c1234567890abcdg"
+                      rating:
+                        type: number
+                        description: Rating given to the course
+                        example: 4.5
+                      comment:
+                        type: string
+                        description: Review comment
+                        example: "Great course! Very informative and well-structured."
+                      createdAt:
+                        type: string
+                        format: date-time
+                        description: Review creation timestamp
+                        example: "2024-08-23T10:30:00.000Z"
+                      updatedAt:
+                        type: string
+                        format: date-time
+                        description: Review last update timestamp
+                        example: "2024-08-23T10:30:00.000Z"
+        '400':
+          description: Bad request - review already exists for this course
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: false
+                  message:
+                    type: string
+                    example: "You have already submitted a review for this course"
+        '401':
+          description: Unauthorized - token missing or invalid
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthErrorResponse'
+        '403':
+          description: Forbidden - Student not enrolled in the course or student access required
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: false
+                  message:
+                    type: string
+                    example: "You must be enrolled in the course to submit a review"
+        '404':
+          description: Course not found
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: false
+                  message:
+                    type: string
+                    example: "Course not found"
+        '500':
+          description: Server error
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: "Server Error"
+                  error:
+                    type: string
+                    example: "Database connection failed"
 
+  # Instructor endpoints - ONLY accessible by Instructor users (authentication + authorization required)
+  /instructor/update-profile:
+    put:
+      summary: Update instructor profile and upload avatar
+      description: |
+        **INSTRUCTOR ONLY ENDPOINT** - Update instructor profile information including name, bio, and upload/update avatar image. The avatar upload will be handled by Cloudinary with automatic resizing to 500x500 pixels.
+      tags:
+        - Instructor
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              properties:
+                name:
+                  type: string
+                  description: Instructor's full name
+                  example: "Dr. John Smith"
+                bio:
+                  type: string
+                  description: Instructor's biography/description
+                  example: "Experienced software developer with 10+ years in web development and teaching."
+                file:
+                  type: string
+                  format: binary
+                  description: The avatar image file to upload (will be resized to 500x500 pixels)
+      responses:
+        '200':
+          description: Profile updated successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  message:
+                    type: string
+                    example: "Profile updated successfully"
+                  instructor:
+                    type: object
+                    properties:
+                      _id:
+                        type: string
+                        description: Instructor's unique identifier
+                        example: "64f8a9b2c1234567890abcde"
+                      name:
+                        type: string
+                        description: Instructor's full name
+                        example: "Dr. John Smith"
+                      email:
+                        type: string
+                        format: email
+                        description: Instructor's email address
+                        example: "john.smith@example.com"
+                      role:
+                        type: string
+                        description: User role
+                        example: "instructor"
+                      bio:
+                        type: string
+                        description: Instructor's biography
+                        example: "Experienced software developer with 10+ years in web development and teaching."
+                      avatar:
+                        type: string
+                        description: Cloudinary URL of the instructor's avatar image
+                        example: "https://res.cloudinary.com/your-cloud-name/image/upload/v1723456789/instructor_profiles/avatar.jpg"
+                      status:
+                        type: string
+                        enum: [pending, approved, rejected]
+                        description: Instructor's approval status
+                        example: "approved"
+                      isBlocked:
+                        type: boolean
+                        description: Whether the instructor is blocked
+                        example: false
+                      createdAt:
+                        type: string
+                        format: date-time
+                        description: Account creation timestamp
+                        example: "2024-08-23T10:30:00.000Z"
+                      updatedAt:
+                        type: string
+                        format: date-time
+                        description: Last profile update timestamp
+                        example: "2024-08-23T15:45:00.000Z"
+        '400':
+          description: Bad request - invalid file format or missing data
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: "Invalid file format. Please upload an image file."
+        '401':
+          description: Unauthorized - token missing or invalid
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthErrorResponse'
+        '403':
+          description: Forbidden - Access denied, only instructors can update profile
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: false
+                  message:
+                    type: string
+                    example: "Access denied. Only instructors can update profile."
+        '500':
+          description: Server error
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: "Cloudinary upload failed"
+
+  /instructor/create-course:
+    post:
+      summary: Create a new course
+      description: |
+        **INSTRUCTOR ONLY ENDPOINT** - Create a new course with optional thumbnail image. The thumbnail will be uploaded to Cloudinary and automatically resized to 500x500 pixels. Created courses will have 'pending' status by default and require admin approval.
+      tags:
+        - Instructor
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required:
+                - title
+                - description
+                - price
+                - category
+              properties:
+                title:
+                  type: string
+                  description: Course title
+                  example: "Introduction to JavaScript Programming"
+                description:
+                  type: string
+                  description: Detailed course description
+                  example: "Learn the fundamentals of JavaScript programming including variables, functions, objects, and DOM manipulation."
+                price:
+                  type: number
+                  minimum: 0
+                  description: Course price (0 for free courses)
+                  example: 99.99
+                category:
+                  type: string
+                  description: Course category
+                  example: "Programming"
+                file:
+                  type: string
+                  format: binary
+                  description: Course thumbnail image file (optional - will be resized to 500x500 pixels)
+      responses:
+        '201':
+          description: Course created successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  message:
+                    type: string
+                    example: "Course created successfully"
+                  course:
+                    type: object
+                    properties:
+                      _id:
+                        type: string
+                        description: Course unique identifier
+                        example: "64f8a9b2c1234567890abcde"
+                      title:
+                        type: string
+                        description: Course title
+                        example: "Introduction to JavaScript Programming"
+                      description:
+                        type: string
+                        description: Course description
+                        example: "Learn the fundamentals of JavaScript programming including variables, functions, objects, and DOM manipulation."
+                      category:
+                        type: string
+                        description: Course category
+                        example: "Programming"
+                      price:
+                        type: number
+                        description: Course price
+                        example: 99.99
+                      thumbnail:
+                        type: string
+                        description: Cloudinary URL of course thumbnail (null if no image uploaded)
+                        example: "https://res.cloudinary.com/your-cloud-name/image/upload/v1723456789/course_thumbnails/thumbnail.jpg"
+                        nullable: true
+                      instructor:
+                        type: string
+                        description: Instructor's user ID
+                        example: "64f8a9b2c1234567890abcdf"
+                      status:
+                        type: string
+                        enum: [pending, approved, rejected]
+                        description: Course approval status
+                        example: "pending"
+                      isPublished:
+                        type: boolean
+                        description: Whether the course is published
+                        example: false
+                      students:
+                        type: array
+                        items:
+                          type: string
+                        description: Array of enrolled student IDs
+                        example: []
+                      lesson:
+                        type: integer
+                        description: Number of lessons in the course
+                        example: 0
+                      createdAt:
+                        type: string
+                        format: date-time
+                        description: Course creation timestamp
+                        example: "2024-08-23T10:30:00.000Z"
+                      updatedAt:
+                        type: string
+                        format: date-time
+                        description: Last course update timestamp
+                        example: "2024-08-23T10:30:00.000Z"
+        '400':
+          description: Bad request - missing required fields or invalid data
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: "Title, description, price, and category are required"
+        '401':
+          description: Unauthorized - token missing or invalid
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthErrorResponse'
+        '403':
+          description: Forbidden - Access denied, only instructors can create courses
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: false
+                  message:
+                    type: string
+                    example: "Access denied. Only instructors can create courses."
+        '500':
+          description: Server error - Cloudinary upload failed or database error
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: "Cloudinary upload failed"
+
+  /instructor/update-course/{courseId}:
+    put:
+      summary: Update course details and thumbnail
+      description: |
+        **INSTRUCTOR ONLY ENDPOINT** - Update an existing course's information including title, description, price, category, and optional thumbnail image. Only the instructor who created the course can update it. The thumbnail will be uploaded to Cloudinary and automatically resized to 500x500 pixels.
+      tags:
+        - Instructor
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: courseId
+          in: path
+          required: true
+          description: The unique identifier of the course to update
+          schema:
+            type: string
+            example: "64f8a9b2c1234567890abcde"
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              properties:
+                title:
+                  type: string
+                  description: Course title
+                  example: "Advanced JavaScript Programming"
+                description:
+                  type: string
+                  description: Detailed course description
+                  example: "Master advanced JavaScript concepts including async/await, closures, prototypes, and modern ES6+ features."
+                price:
+                  type: number
+                  minimum: 0
+                  description: Course price (0 for free courses)
+                  example: 149.99
+                category:
+                  type: string
+                  description: Course category
+                  example: "Programming"
+                file:
+                  type: string
+                  format: binary
+                  description: Course thumbnail image file (optional - will be resized to 500x500 pixels and replace existing thumbnail)
+      responses:
+        '200':
+          description: Course updated successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  message:
+                    type: string
+                    example: "Course updated successfully"
+                  course:
+                    type: object
+                    properties:
+                      _id:
+                        type: string
+                        description: Course unique identifier
+                        example: "64f8a9b2c1234567890abcde"
+                      title:
+                        type: string
+                        description: Course title
+                        example: "Advanced JavaScript Programming"
+                      description:
+                        type: string
+                        description: Course description
+                        example: "Master advanced JavaScript concepts including async/await, closures, prototypes, and modern ES6+ features."
+                      category:
+                        type: string
+                        description: Course category
+                        example: "Programming"
+                      price:
+                        type: number
+                        description: Course price
+                        example: 149.99
+                      thumbnail:
+                        type: string
+                        description: Cloudinary URL of course thumbnail
+                        example: "https://res.cloudinary.com/your-cloud-name/image/upload/v1723456789/course_thumbnails/updated_thumbnail.jpg"
+                        nullable: true
+                      instructor:
+                        type: string
+                        description: Instructor's user ID
+                        example: "64f8a9b2c1234567890abcdf"
+                      status:
+                        type: string
+                        enum: [pending, approved, rejected]
+                        description: Course approval status
+                        example: "approved"
+                      isPublished:
+                        type: boolean
+                        description: Whether the course is published
+                        example: true
+                      students:
+                        type: array
+                        items:
+                          type: string
+                        description: Array of enrolled student IDs
+                        example: ["64f8a9b2c1234567890abcdh", "64f8a9b2c1234567890abcdi"]
+                      lesson:
+                        type: integer
+                        description: Number of lessons in the course
+                        example: 12
+                      createdAt:
+                        type: string
+                        format: date-time
+                        description: Course creation timestamp
+                        example: "2024-08-20T10:30:00.000Z"
+                      updatedAt:
+                        type: string
+                        format: date-time
+                        description: Last course update timestamp
+                        example: "2024-08-23T15:45:00.000Z"
+        '400':
+          description: Bad request - invalid data or validation errors
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: "Validation error: Price must be a positive number"
+        '401':
+          description: Unauthorized - token missing or invalid
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthErrorResponse'
+        '403':
+          description: Forbidden - Access denied, only the course instructor can update
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: false
+                  message:
+                    type: string
+                    example: "Access denied. You are not the instructor of this course."
+        '404':
+          description: Course not found
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: false
+                  message:
+                    type: string
+                    example: "Course not found"
+        '500':
+          description: Server error - Cloudinary upload failed or database error
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: "Cloudinary upload failed"
+
+  /instructor/delete-course/{courseId}:
+    delete:
+      summary: Delete a course
+      description: |
+        **INSTRUCTOR ONLY ENDPOINT** - Permanently delete an existing course. Only the instructor who created the course can delete it. This action is irreversible and will remove all course data including lessons, enrollments, and reviews.
+      tags:
+        - Instructor
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: courseId
+          in: path
+          required: true
+          description: The unique identifier of the course to delete
+          schema:
+            type: string
+            example: "64f8a9b2c1234567890abcde"
+      responses:
+        '200':
+          description: Course deleted successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  message:
+                    type: string
+                    example: "Course deleted successfully"
+        '401':
+          description: Unauthorized - token missing or invalid
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthErrorResponse'
+        '403':
+          description: Forbidden - Access denied, only the course instructor can delete
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: false
+                  message:
+                    type: string
+                    example: "Access denied. You are not the instructor of this course."
+        '404':
+          description: Course not found
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: false
+                  message:
+                    type: string
+                    example: "Course not found"
+        '500':
+          description: Server error - Database deletion failed
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: "Failed to delete course due to database error"
+
+  /instructor/my-courses:
+    get:
+      summary: Get instructor's courses
+      description: |
+        **INSTRUCTOR ONLY ENDPOINT** - Retrieve all courses created by the authenticated instructor. Returns courses regardless of their approval status (pending, approved, rejected).
+      tags:
+        - Instructor
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: Courses retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  message:
+                    type: string
+                    example: "Courses retrieved successfully"
+                  courses:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        _id:
+                          type: string
+                          description: Course unique identifier
+                          example: "64f8a9b2c1234567890abcde"
+                        title:
+                          type: string
+                          description: Course title
+                          example: "Introduction to JavaScript Programming"
+                        description:
+                          type: string
+                          description: Course description
+                          example: "Learn the fundamentals of JavaScript programming including variables, functions, objects, and DOM manipulation."
+                        category:
+                          type: string
+                          description: Course category
+                          example: "Programming"
+                        price:
+                          type: number
+                          description: Course price
+                          example: 99.99
+                        thumbnail:
+                          type: string
+                          description: Cloudinary URL of course thumbnail
+                          example: "https://res.cloudinary.com/your-cloud-name/image/upload/v1723456789/course_thumbnails/thumbnail.jpg"
+                          nullable: true
+                        instructor:
+                          type: string
+                          description: Instructor's user ID
+                          example: "64f8a9b2c1234567890abcdf"
+                        status:
+                          type: string
+                          enum: [pending, approved, rejected]
+                          description: Course approval status
+                          example: "approved"
+                        isPublished:
+                          type: boolean
+                          description: Whether the course is published
+                          example: true
+                        students:
+                          type: array
+                          items:
+                            type: string
+                          description: Array of enrolled student IDs
+                          example: ["64f8a9b2c1234567890abcdh", "64f8a9b2c1234567890abcdi"]
+                        lesson:
+                          type: integer
+                          description: Number of lessons in the course
+                          example: 12
+                        createdAt:
+                          type: string
+                          format: date-time
+                          description: Course creation timestamp
+                          example: "2024-08-20T10:30:00.000Z"
+                        updatedAt:
+                          type: string
+                          format: date-time
+                          description: Last course update timestamp
+                          example: "2024-08-23T15:45:00.000Z"
+                    example:
+                      - _id: "64f8a9b2c1234567890abcde"
+                        title: "Introduction to JavaScript"
+                        description: "Learn JavaScript fundamentals"
+                        category: "Programming"
+                        price: 99.99
+                        thumbnail: "https://res.cloudinary.com/example/image/upload/v1723456789/course_thumbnails/js-course.jpg"
+                        instructor: "64f8a9b2c1234567890abcdf"
+                        status: "approved"
+                        isPublished: true
+                        students: ["64f8a9b2c1234567890abcdh"]
+                        lesson: 15
+                        createdAt: "2024-08-20T10:30:00.000Z"
+                        updatedAt: "2024-08-23T15:45:00.000Z"
+                      - _id: "64f8a9b2c1234567890abcdx"
+                        title: "Advanced React Concepts"
+                        description: "Master advanced React patterns"
+                        category: "Web Development"
+                        price: 149.99
+                        thumbnail: null
+                        instructor: "64f8a9b2c1234567890abcdf"
+                        status: "pending"
+                        isPublished: false
+                        students: []
+                        lesson: 8
+                        createdAt: "2024-08-22T14:20:00.000Z"
+                        updatedAt: "2024-08-22T14:20:00.000Z"
+        '401':
+          description: Unauthorized - token missing or invalid
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthErrorResponse'
+        '403':
+          description: Forbidden - Instructor access required
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthErrorResponse'
+        '500':
+          description: Server error - Database query failed
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: "Database connection failed"
+
+  /instructor/add-lesson/{courseId}:
+    post:
+      summary: Add a lesson to a course
+      description: |
+        **INSTRUCTOR ONLY ENDPOINT** - Upload a new lesson to an existing course with optional video content. Only the instructor who created the course can add lessons. Video files will be uploaded to Cloudinary with optimized chunking for large files.
+      tags:
+        - Instructor
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: courseId
+          in: path
+          required: true
+          description: The unique identifier of the course to add the lesson to
+          schema:
+            type: string
+            example: "64f8a9b2c1234567890abcde"
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required:
+                - title
+                - content
+                - order
+              properties:
+                title:
+                  type: string
+                  description: Lesson title
+                  example: "Introduction to Variables and Data Types"
+                content:
+                  type: string
+                  description: Lesson text content/description
+                  example: "In this lesson, we'll explore JavaScript variables, including var, let, and const keywords, and different data types like strings, numbers, and booleans."
+                order:
+                  type: integer
+                  minimum: 1
+                  description: Lesson order/sequence number in the course
+                  example: 1
+                file:
+                  type: string
+                  format: binary
+                  description: Video file for the lesson (optional - supports various video formats)
+      responses:
+        '201':
+          description: Lesson uploaded successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  message:
+                    type: string
+                    example: "Lesson uploaded successfully"
+                  lesson:
+                    type: object
+                    properties:
+                      _id:
+                        type: string
+                        description: Lesson unique identifier
+                        example: "64f8a9b2c1234567890abcde"
+                      title:
+                        type: string
+                        description: Lesson title
+                        example: "Introduction to Variables and Data Types"
+                      content:
+                        type: string
+                        description: Lesson text content
+                        example: "In this lesson, we'll explore JavaScript variables, including var, let, and const keywords, and different data types like strings, numbers, and booleans."
+                      videoUrl:
+                        type: string
+                        description: Cloudinary URL of the lesson video (null if no video uploaded)
+                        example: "https://res.cloudinary.com/your-cloud-name/video/upload/v1723456789/course_videos/lesson1.mp4"
+                        nullable: true
+                      order:
+                        type: integer
+                        description: Lesson order in the course
+                        example: 1
+                      course:
+                        type: string
+                        description: Course ID this lesson belongs to
+                        example: "64f8a9b2c1234567890abcdf"
+                      createdAt:
+                        type: string
+                        format: date-time
+                        description: Lesson creation timestamp
+                        example: "2024-08-23T10:30:00.000Z"
+                      updatedAt:
+                        type: string
+                        format: date-time
+                        description: Lesson last update timestamp
+                        example: "2024-08-23T10:30:00.000Z"
+        '400':
+          description: Bad request - missing required fields or invalid data
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: "Title, content, and order are required fields"
+        '401':
+          description: Unauthorized - token missing or invalid
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthErrorResponse'
+        '403':
+          description: Forbidden - Access denied, only the course instructor can add lessons
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: false
+                  message:
+                    type: string
+                    example: "Access denied. Only an instructor can upload lesson."
+        '404':
+          description: Course not found
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: false
+                  message:
+                    type: string
+                    example: "Course not found"
+        '500':
+          description: Server error - Cloudinary upload failed or database error
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: "Video upload to Cloudinary failed"
+
+  /instructor/enrolled-students/{courseId}:
+    get:
+      summary: View students enrolled in a course
+      description: |
+        **INSTRUCTOR ONLY ENDPOINT** - Retrieve all students enrolled in a specific course. Only the instructor who created the course can view its enrolled students. Returns student details including name, email, and avatar.
+      tags:
+        - Instructor
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: courseId
+          in: path
+          required: true
+          description: The unique identifier of the course to view enrolled students for
+          schema:
+            type: string
+            example: "64f8a9b2c1234567890abcde"
+      responses:
+        '200':
+          description: Enrolled students retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  count:
+                    type: integer
+                    description: Number of enrolled students
+                    example: 15
+                  students:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        _id:
+                          type: string
+                          description: Student's unique identifier
+                          example: "64f8a9b2c1234567890abcde"
+                        name:
+                          type: string
+                          description: Student's full name
+                          example: "Alice Johnson"
+                        email:
+                          type: string
+                          format: email
+                          description: Student's email address
+                          example: "alice.johnson@example.com"
+                        avatar:
+                          type: string
+                          description: Student's avatar image URL
+                          example: "https://res.cloudinary.com/your-cloud-name/image/upload/v1723456789/student_avatars/alice.jpg"
+                          nullable: true
+                    example:
+                      - _id: "64f8a9b2c1234567890abcde"
+                        name: "Alice Johnson"
+                        email: "alice.johnson@example.com"
+                        avatar: "https://res.cloudinary.com/example/image/upload/v1723456789/avatars/alice.jpg"
+                      - _id: "64f8a9b2c1234567890abcdf"
+                        name: "Bob Smith"
+                        email: "bob.smith@example.com"
+                        avatar: null
+                      - _id: "64f8a9b2c1234567890abcdg"
+                        name: "Carol Davis"
+                        email: "carol.davis@example.com"
+                        avatar: "https://res.cloudinary.com/example/image/upload/v1723456789/avatars/carol.jpg"
+        '401':
+          description: Unauthorized - token missing or invalid
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthErrorResponse'
+        '403':
+          description: Forbidden - Access denied, only the course instructor can view enrolled students
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: false
+                  message:
+                    type: string
+                    example: "Access denied. You are not the instructor of this course."
+        '404':
+          description: Course not found
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: false
+                  message:
+                    type: string
+                    example: "Course not found"
+        '500':
+          description: Server error - Database query failed
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: "Database connection failed"
+
+  # Course endpoints - Accessible by authenticated users
+  /course/view-courses:
+    get:
+      summary: Get all published courses
+      description: |
+        Retrieve all published courses available in the system. Returns courses sorted by creation date (newest first) with instructor details.
+      tags:
+        - Course
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: Courses retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  count:
+                    type: integer
+                    description: Number of published courses
+                    example: 25
+                  courses:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        _id:
+                          type: string
+                          description: Course unique identifier
+                          example: "64f8a9b2c1234567890abcde"
+                        title:
+                          type: string
+                          description: Course title
+                          example: "Introduction to JavaScript Programming"
+                        description:
+                          type: string
+                          description: Course description
+                          example: "Learn the fundamentals of JavaScript programming"
+                        category:
+                          type: string
+                          description: Course category
+                          example: "Programming"
+                        price:
+                          type: number
+                          description: Course price
+                          example: 99.99
+                        thumbnail:
+                          type: string
+                          description: Course thumbnail URL
+                          example: "https://res.cloudinary.com/example/image/upload/v1723456789/course_thumbnails/js-course.jpg"
+                          nullable: true
+                        instructor:
+                          type: object
+                          properties:
+                            _id:
+                              type: string
+                              example: "64f8a9b2c1234567890abcdf"
+                            name:
+                              type: string
+                              example: "Dr. John Smith"
+                            email:
+                              type: string
+                              example: "john.smith@example.com"
+                        isPublished:
+                          type: boolean
+                          description: Publication status
+                          example: true
+                        students:
+                          type: array
+                          items:
+                            type: string
+                          description: Array of enrolled student IDs
+                        lesson:
+                          type: integer
+                          description: Number of lessons
+                          example: 15
+                        createdAt:
+                          type: string
+                          format: date-time
+                          example: "2024-08-23T10:30:00.000Z"
+                        updatedAt:
+                          type: string
+                          format: date-time
+                          example: "2024-08-23T15:45:00.000Z"
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthErrorResponse'
+        '500':
+          description: Server error
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: "Database connection failed"
+
+  /course/course-details/{courseId}:
+    get:
+      summary: Get course details
+      description: |
+        Retrieve detailed information about a specific course including instructor details and lessons.
+      tags:
+        - Course
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: courseId
+          in: path
+          required: true
+          description: The unique identifier of the course
+          schema:
+            type: string
+            example: "64f8a9b2c1234567890abcde"
+      responses:
+        '200':
+          description: Course details retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  course:
+                    type: object
+                    properties:
+                      _id:
+                        type: string
+                        description: Course unique identifier
+                        example: "64f8a9b2c1234567890abcde"
+                      title:
+                        type: string
+                        description: Course title
+                        example: "Introduction to JavaScript Programming"
+                      description:
+                        type: string
+                        description: Course description
+                        example: "Learn the fundamentals of JavaScript programming"
+                      category:
+                        type: string
+                        description: Course category
+                        example: "Programming"
+                      price:
+                        type: number
+                        description: Course price
+                        example: 99.99
+                      thumbnail:
+                        type: string
+                        description: Course thumbnail URL
+                        example: "https://res.cloudinary.com/example/image/upload/v1723456789/course_thumbnails/js-course.jpg"
+                        nullable: true
+                      instructor:
+                        type: object
+                        properties:
+                          _id:
+                            type: string
+                            example: "64f8a9b2c1234567890abcdf"
+                          name:
+                            type: string
+                            example: "Dr. John Smith"
+                          email:
+                            type: string
+                            example: "john.smith@example.com"
+                      lessons:
+                        type: array
+                        items:
+                          type: object
+                          properties:
+                            _id:
+                              type: string
+                              example: "64f8a9b2c1234567890abcdg"
+                            title:
+                              type: string
+                              example: "Variables and Data Types"
+                            content:
+                              type: string
+                              example: "Introduction to JavaScript variables"
+                            videoUrl:
+                              type: string
+                              example: "https://res.cloudinary.com/example/video/upload/v1723456789/course_videos/lesson1.mp4"
+                              nullable: true
+                            order:
+                              type: integer
+                              example: 1
+                      isPublished:
+                        type: boolean
+                        example: true
+                      students:
+                        type: array
+                        items:
+                          type: string
+                        description: Array of enrolled student IDs
+                      createdAt:
+                        type: string
+                        format: date-time
+                        example: "2024-08-23T10:30:00.000Z"
+                      updatedAt:
+                        type: string
+                        format: date-time
+                        example: "2024-08-23T15:45:00.000Z"
+        '400':
+          description: Invalid course ID
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: false
+                  message:
+                    type: string
+                    example: "Invalid course ID"
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthErrorResponse'
+        '404':
+          description: Course not found
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: false
+                  message:
+                    type: string
+                    example: "Course not found"
+        '500':
+          description: Server error
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: "Database connection failed"
+
+  /course/toggle-publish/{courseId}:
+    put:
+      summary: Toggle course publication status
+      description: |
+        **INSTRUCTOR/ADMIN ONLY ENDPOINT** - Toggle the publication status of a course. Only the course instructor or admin can publish/unpublish courses.
+      tags:
+        - Course
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: courseId
+          in: path
+          required: true
+          description: The unique identifier of the course to toggle
+          schema:
+            type: string
+            example: "64f8a9b2c1234567890abcde"
+      responses:
+        '200':
+          description: Course publication status toggled successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  message:
+                    type: string
+                    example: "Course published successfully"
+                  course:
+                    type: object
+                    properties:
+                      _id:
+                        type: string
+                        example: "64f8a9b2c1234567890abcde"
+                      title:
+                        type: string
+                        example: "Introduction to JavaScript Programming"
+                      description:
+                        type: string
+                        example: "Learn the fundamentals of JavaScript programming"
+                      isPublished:
+                        type: boolean
+                        example: true
+                      instructor:
+                        type: string
+                        example: "64f8a9b2c1234567890abcdf"
+                      createdAt:
+                        type: string
+                        format: date-time
+                        example: "2024-08-23T10:30:00.000Z"
+                      updatedAt:
+                        type: string
+                        format: date-time
+                        example: "2024-08-23T15:45:00.000Z"
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthErrorResponse'
+        '403':
+          description: Forbidden - Access denied
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: false
+                  message:
+                    type: string
+                    example: "Access denied. You are not the instructor of this course."
+        '404':
+          description: Course not found
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: false
+                  message:
+                    type: string
+                    example: "Course not found"
+        '500':
+          description: Server error
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: "Database connection failed"
+
+  /course/search-courses:
+    post:
+      summary: Search courses
+      description: |
+        Search for published courses by keyword (title/description) and/or category. Returns matching courses sorted by creation date.
+      tags:
+        - Course
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                keyword:
+                  type: string
+                  description: Search keyword to match in title or description
+                  example: "JavaScript"
+                category:
+                  type: string
+                  description: Filter by specific category
+                  example: "Programming"
+      responses:
+        '200':
+          description: Search completed successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  count:
+                    type: integer
+                    description: Number of courses found
+                    example: 8
+                  courses:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        _id:
+                          type: string
+                          description: Course unique identifier
+                          example: "64f8a9b2c1234567890abcde"
+                        title:
+                          type: string
+                          description: Course title
+                          example: "Advanced JavaScript Concepts"
+                        description:
+                          type: string
+                          description: Course description
+                          example: "Master advanced JavaScript programming techniques"
+                        category:
+                          type: string
+                          description: Course category
+                          example: "Programming"
+                        price:
+                          type: number
+                          description: Course price
+                          example: 149.99
+                        thumbnail:
+                          type: string
+                          description: Course thumbnail URL
+                          example: "https://res.cloudinary.com/example/image/upload/v1723456789/course_thumbnails/advanced-js.jpg"
+                          nullable: true
+                        instructor:
+                          type: object
+                          properties:
+                            _id:
+                              type: string
+                              example: "64f8a9b2c1234567890abcdf"
+                            name:
+                              type: string
+                              example: "Dr. John Smith"
+                            email:
+                              type: string
+                              example: "john.smith@example.com"
+                        isPublished:
+                          type: boolean
+                          example: true
+                        createdAt:
+                          type: string
+                          format: date-time
+                          example: "2024-08-23T10:30:00.000Z"
+                        updatedAt:
+                          type: string
+                          format: date-time
+                          example: "2024-08-23T15:45:00.000Z"
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthErrorResponse'
+        '500':
+          description: Server error
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: "Database connection failed"
+
+  # Lesson endpoints - Accessible by authenticated users
+  /lesson/add-lesson/{courseId}:
+    post:
+      summary: Add a new lesson to a course
+      description: |
+        **INSTRUCTOR ONLY ENDPOINT** - Add a new lesson to a specific course. Only the course instructor or admin can add lessons. Videos are uploaded to Cloudinary.
+      tags:
+        - Lessons
+      security:
+        - BearerAuth: []
+      parameters:
+        - in: path
+          name: courseId
+          required: true
+          schema:
+            type: string
+          description: Course ID to add the lesson to
+          example: "64f8a9b2c1234567890abcde"
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required:
+                - title
+                - content
+                - order
+              properties:
+                title:
+                  type: string
+                  description: Lesson title
+                  example: "Introduction to Variables"
+                content:
+                  type: string
+                  description: Lesson content/description
+                  example: "In this lesson, we'll learn about JavaScript variables and how to declare them."
+                order:
+                  type: integer
+                  minimum: 1
+                  description: Lesson order in the course
+                  example: 1
+                file:
+                  type: string
+                  format: binary
+                  description: Video file for the lesson (optional)
+      responses:
+        '201':
+          description: Lesson added successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  message:
+                    type: string
+                    example: "Lesson added successfully"
+                  lesson:
+                    $ref: '#/components/schemas/Lesson'
+        '400':
+          description: Invalid course ID
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: false
+                  message:
+                    type: string
+                    example: "Invalid course ID"
+        '403':
+          description: Access denied - not the course instructor
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: false
+                  message:
+                    type: string
+                    example: "Access denied. You are not the instructor of this course."
+        '404':
+          description: Course not found
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: false
+                  message:
+                    type: string
+                    example: "Course not found"
+        '500':
+          description: Server error or video upload failed
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: false
+                  message:
+                    type: string
+                    example: "Video upload failed"
+
+  /lesson/update-lesson/{lessonId}:
+    put:
+      summary: Update an existing lesson
+      description: |
+        **INSTRUCTOR ONLY ENDPOINT** - Update an existing lesson. Only the course instructor or admin can update lessons.
+      tags:
+        - Lessons
+      security:
+        - BearerAuth: []
+      parameters:
+        - in: path
+          name: lessonId
+          required: true
+          schema:
+            type: string
+          description: Lesson ID to update
+          example: "64f8a9b2c1234567890abcdf"
+      requestBody:
+        required: false
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              properties:
+                title:
+                  type: string
+                  description: Updated lesson title
+                  example: "Advanced Variables and Scope"
+                content:
+                  type: string
+                  description: Updated lesson content
+                  example: "Deep dive into variable scope and hoisting in JavaScript."
+                order:
+                  type: integer
+                  minimum: 1
+                  description: Updated lesson order
+                  example: 2
+                file:
+                  type: string
+                  format: binary
+                  description: New video file for the lesson (optional)
+      responses:
+        '200':
+          description: Lesson updated successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  message:
+                    type: string
+                    example: "Lesson updated successfully"
+                  lesson:
+                    $ref: '#/components/schemas/Lesson'
+        '403':
+          description: Access denied - not the course instructor
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: false
+                  message:
+                    type: string
+                    example: "Access denied. You are not the instructor of this course."
+        '404':
+          description: Lesson not found
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: false
+                  message:
+                    type: string
+                    example: "Lesson not found"
+        '500':
+          description: Server error or video upload failed
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: false
+                  message:
+                    type: string
+                    example: "Video upload failed"
+
+  /lesson/delete-lesson/{lessonId}:
+    delete:
+      summary: Delete a lesson
+      description: |
+        **INSTRUCTOR ONLY ENDPOINT** - Delete a lesson from a course. Only the course instructor or admin can delete lessons.
+      tags:
+        - Lessons
+      security:
+        - BearerAuth: []
+      parameters:
+        - in: path
+          name: lessonId
+          required: true
+          schema:
+            type: string
+          description: Lesson ID to delete
+          example: "64f8a9b2c1234567890abcdf"
+      responses:
+        '200':
+          description: Lesson deleted successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  message:
+                    type: string
+                    example: "Lesson deleted successfully"
+        '403':
+          description: Access denied - not the course instructor
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: false
+                  message:
+                    type: string
+                    example: "Access denied. You are not the instructor of this course."
+        '404':
+          description: Lesson not found
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: false
+                  message:
+                    type: string
+                    example: "Lesson not found"
+        '500':
+          description: Server error
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: "Internal server error"
+
+  /lesson/get-lesson/{courseId}:
+    get:
+      summary: Get all lessons for a course
+      description: |
+        Get all lessons belonging to a specific course, sorted by order. This endpoint can be accessed by authenticated users.
+      tags:
+        - Lessons
+      security:
+        - BearerAuth: []
+      parameters:
+        - in: path
+          name: courseId
+          required: true
+          schema:
+            type: string
+          description: Course ID to get lessons from
+          example: "64f8a9b2c1234567890abcde"
+      responses:
+        '200':
+          description: Lessons retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  total:
+                    type: integer
+                    description: Total number of lessons
+                    example: 5
+                  lessons:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Lesson'
+        '400':
+          description: Invalid course ID
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: false
+                  message:
+                    type: string
+                    example: "Invalid course ID"
+        '500':
+          description: Server error
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: "Internal server error"
+
+  /lesson/mark-progress/{courseId}/{lessonId}:
+    post:
+      summary: Mark lesson as completed
+      description: |
+        **STUDENT ONLY ENDPOINT** - Mark a lesson as completed. Only enrolled students can mark lesson progress.
+      tags:
+        - Lessons
+      security:
+        - BearerAuth: []
+      parameters:
+        - in: path
+          name: courseId
+          required: true
+          schema:
+            type: string
+          description: Course ID
+          example: "64f8a9b2c1234567890abcde"
+        - in: path
+          name: lessonId
+          required: true
+          schema:
+            type: string
+          description: Lesson ID to mark as completed
+          example: "64f8a9b2c1234567890abcdf"
+      responses:
+        '200':
+          description: Lesson marked as completed
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  message:
+                    type: string
+                    example: "Lesson marked as completed"
+                  progress:
+                    $ref: '#/components/schemas/LessonProgress'
+        '403':
+          description: Access denied - not enrolled or not a student
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: false
+                  message:
+                    type: string
+                    examples:
+                      not_student:
+                        value: "Access denied. Only students can mark lesson progress."
+                        summary: "User is not a student"
+                      not_enrolled:
+                        value: "Access denied. You are not enrolled in this course."
+                        summary: "Student not enrolled in course"
+        '404':
+          description: Lesson or course not found
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: false
+                  message:
+                    type: string
+                    examples:
+                      lesson_not_found:
+                        value: "Lesson not found"
+                        summary: "Lesson doesn't exist"
+                      course_not_found:
+                        value: "Course not found"
+                        summary: "Course doesn't exist"
+        '500':
+          description: Server error
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: "Internal server error"
+
+  
+  # Review endpoints - Accessible by authenticated users
+  /review/add-review/{courseId}:
+    post:
+      summary: Add a review for a course
+      description: |
+        **STUDENT ONLY ENDPOINT** - Add a review for a course. Only enrolled students can submit reviews, and each student can only review a course once.
+      tags:
+        - Reviews
+      security:
+        - BearerAuth: []
+      parameters:
+        - in: path
+          name: courseId
+          required: true
+          schema:
+            type: string
+          description: Course ID to review
+          example: "64f8a9b2c1234567890abcde"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - rating
+                - comment
+              properties:
+                rating:
+                  type: integer
+                  minimum: 1
+                  maximum: 5
+                  description: Rating from 1 to 5 stars
+                  example: 4
+                comment:
+                  type: string
+                  description: Review comment
+                  example: "Great course! I learned a lot about JavaScript fundamentals."
+      responses:
+        '201':
+          description: Review submitted successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  message:
+                    type: string
+                    example: "Review Submitted Successfully"
+                  data:
+                    $ref: '#/components/schemas/Review'
+        '400':
+          description: User already submitted a review for this course
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: false
+                  message:
+                    type: string
+                    example: "You have already submitted a review for this course"
+        '403':
+          description: User not enrolled in the course
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: false
+                  message:
+                    type: string
+                    example: "You must be enrolled in the course to submit a review"
+        '404':
+          description: Course not found
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: false
+                  message:
+                    type: string
+                    example: "Course not found"
+        '500':
+          description: Server error
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: "Server Error"
+                  error:
+                    type: string
+                    example: "Error details"
+
+  /review/edit-review/{reviewId}:
+    put:
+      summary: Edit an existing review
+      description: |
+        **STUDENT ONLY ENDPOINT** - Edit your own review. Students can only edit reviews they have submitted.
+      tags:
+        - Reviews
+      security:
+        - BearerAuth: []
+      parameters:
+        - in: path
+          name: reviewId
+          required: true
+          schema:
+            type: string
+          description: Review ID to edit
+          example: "64f8a9b2c1234567890abcdf"
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                rating:
+                  type: integer
+                  minimum: 1
+                  maximum: 5
+                  description: Updated rating from 1 to 5 stars
+                  example: 5
+                comment:
+                  type: string
+                  description: Updated review comment
+                  example: "Actually, this course was amazing! Changed my rating to 5 stars."
+      responses:
+        '200':
+          description: Review updated successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  message:
+                    type: string
+                    example: "Review Updated Successfully"
+                  data:
+                    $ref: '#/components/schemas/Review'
+        '403':
+          description: Not authorized to edit this review
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: false
+                  message:
+                    type: string
+                    example: "You are not allowed to edit this review"
+        '404':
+          description: Review not found
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: false
+                  message:
+                    type: string
+                    example: "Review not found"
+        '500':
+          description: Server error
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: "Server Error"
+                  error:
+                    type: string
+                    example: "Error details"
+
+  /review/delete-review/{reviewId}:
+    delete:
+      summary: Delete a review
+      description: |
+        **STUDENT/ADMIN ENDPOINT** - Delete a review. Students can delete their own reviews, admins can delete any review.
+      tags:
+        - Reviews
+      security:
+        - BearerAuth: []
+      parameters:
+        - in: path
+          name: reviewId
+          required: true
+          schema:
+            type: string
+          description: Review ID to delete
+          example: "64f8a9b2c1234567890abcdf"
+      responses:
+        '200':
+          description: Review deleted successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  message:
+                    type: string
+                    example: "Review Deleted Successfully"
+        '403':
+          description: Not authorized to delete this review
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: false
+                  message:
+                    type: string
+                    example: "You are not allowed to delete this review"
+        '404':
+          description: Review not found
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: false
+                  message:
+                    type: string
+                    example: "Review not found"
+        '500':
+          description: Server error
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: "Server Error"
+                  error:
+                    type: string
+                    example: "Error details"
+
+  /review/course-reviews/{courseId}:
+    get:
+      summary: Get all reviews for a course
+      description: |
+        Get all reviews for a specific course. This endpoint is public and doesn't require authentication.
+      tags:
+        - Reviews
+      parameters:
+        - in: path
+          name: courseId
+          required: true
+          schema:
+            type: string
+          description: Course ID to get reviews for
+          example: "64f8a9b2c1234567890abcde"
+      responses:
+        '200':
+          description: Reviews retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  count:
+                    type: integer
+                    description: Number of reviews
+                    example: 15
+                  data:
+                    type: array
+                    items:
+                      allOf:
+                        - $ref: '#/components/schemas/Review'
+                        - type: object
+                          properties:
+                            student:
+                              type: object
+                              properties:
+                                _id:
+                                  type: string
+                                  example: "64f8a9b2c1234567890abce1"
+                                name:
+                                  type: string
+                                  example: "John Doe"
+                                avatar:
+                                  type: string
+                                  example: "https://res.cloudinary.com/example/avatar.jpg"
+        '500':
+          description: Server error
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: "Server Error"
+                  error:
+                    type: string
+                    example: "Error details"
+
+  /review/my-reviews:
+    get:
+      summary: Get current student's reviews
+      description: |
+        **STUDENT ONLY ENDPOINT** - Get all reviews submitted by the authenticated student.
+      tags:
+        - Reviews
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: Student reviews retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  count:
+                    type: integer
+                    description: Number of reviews
+                    example: 3
+                  data:
+                    type: array
+                    items:
+                      allOf:
+                        - $ref: '#/components/schemas/Review'
+                        - type: object
+                          properties:
+                            course:
+                              type: object
+                              properties:
+                                _id:
+                                  type: string
+                                  example: "64f8a9b2c1234567890abcde"
+                                title:
+                                  type: string
+                                  example: "Introduction to JavaScript Programming"
+                                thumbnail:
+                                  type: string
+                                  example: "https://res.cloudinary.com/example/course-thumb.jpg"
+        '500':
+          description: Server error
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: "Server Error"
+                  error:
+                    type: string
+                    example: "Error details"
+
+  /review/average/{courseId}:
+    get:
+      summary: Get average rating for a course
+      description: |
+        Get the average rating and total number of reviews for a specific course. This endpoint is public and doesn't require authentication.
+      tags:
+        - Reviews
+      parameters:
+        - in: path
+          name: courseId
+          required: true
+          schema:
+            type: string
+          description: Course ID to get average rating for
+          example: "64f8a9b2c1234567890abcde"
+      responses:
+        '200':
+          description: Average rating retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  averageRating:
+                    type: number
+                    format: float
+                    description: Average rating (0 if no reviews)
+                    example: 4.3
+                  totalReviews:
+                    type: integer
+                    description: Total number of reviews
+                    example: 15
+        '500':
+          description: Server error
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: "Server Error"
+                  error:
+                    type: string
+                    example: "Error details"
+
+  
+  # Enrollment endpoints - Accessible by authenticated users
+  /enrollment/checkout-session/{courseId}:
+    post:
+      summary: Create Stripe checkout session for course enrollment
+      description: Creates a Stripe checkout session for a student to enroll in a course
+      tags:
+        - Enrollments
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: courseId
+          in: path
+          required: true
+          description: ID of the course to enroll in
+          schema:
+            type: string
+            example: "64a1b2c3d4e5f6789abcdef2"
+      responses:
+        '200':
+          description: Checkout session created successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CheckoutSessionResponse'
+        '400':
+          description: Bad request - Course not available or already enrolled
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              examples:
+                courseNotAvailable:
+                  summary: Course not available
+                  value:
+                    success: false
+                    message: "Course is not available for enrollment"
+                alreadyEnrolled:
+                  summary: Already enrolled
+                  value:
+                    success: false
+                    message: "You are already enrolled in this course"
+        '404':
+          description: Course not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                success: false
+                message: "Course not found"
+        '500':
+          description: Server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                status: "fail"
+                message: "Server Error"
+
+  /enrollment/verify-payment:
+    post:
+      summary: Verify payment and confirm enrollment
+      description: Verifies Stripe payment and creates enrollment record
+      tags:
+        - Enrollments
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/VerifyPaymentRequest'
+      responses:
+        '200':
+          description: Payment verified and enrollment confirmed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EnrollmentResponse'
+        '400':
+          description: Bad request - Payment not completed or already enrolled
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              examples:
+                paymentNotCompleted:
+                  summary: Payment not completed
+                  value:
+                    success: false
+                    message: "Payment not completed"
+                alreadyEnrolled:
+                  summary: Already enrolled
+                  value:
+                    success: false
+                    message: "You are already enrolled in this course"
+        '500':
+          description: Server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+
+  /enrollment/cancel-enrollment/{courseId}:
+    delete:
+      summary: Cancel course enrollment
+      description: Cancels a student's enrollment in a course
+      tags:
+        - Enrollments
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: courseId
+          in: path
+          required: true
+          description: ID of the course to cancel enrollment for
+          schema:
+            type: string
+            example: "64a1b2c3d4e5f6789abcdef2"
+      responses:
+        '200':
+          description: Enrollment cancelled successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: "success"
+                  message:
+                    type: string
+                    example: "Enrollment cancelled successfully"
+        '404':
+          description: Enrollment not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                success: false
+                message: "Enrollment not found"
+        '500':
+          description: Server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /enrollment/my-courses:
+    get:
+      summary: Get enrolled courses for current student
+      description: Retrieves all courses that the current student is enrolled in
+      tags:
+        - Enrollments
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: List of enrolled courses retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  total:
+                    type: integer
+                    example: 3
+                  courses:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Course'
+        '500':
+          description: Server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /enrollment/students/{courseId}:
+    get:
+      summary: Get students enrolled in a course
+      description: Retrieves all students enrolled in a specific course (instructor/admin only)
+      tags:
+        - Enrollments
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: courseId
+          in: path
+          required: true
+          description: ID of the course to get students for
+          schema:
+            type: string
+            example: "64a1b2c3d4e5f6789abcdef2"
+      responses:
+        '200':
+          description: List of enrolled students retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  total:
+                    type: integer
+                    example: 25
+                  students:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Student'
+        '403':
+          description: Forbidden - Insufficient permissions
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: Server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+
+                    
+  
+
+  
 components:
   securitySchemes:
     BearerAuth:
@@ -355,10 +3502,10 @@ components:
           type: string
           description: User's unique identifier
           example: "64f8a9b2c1234567890abcde"
-        username:
+        name:
           type: string
-          description: User's username
-          example: "john_instructor"
+          description: User's full name
+          example: "John Doe"
         email:
           type: string
           format: email
@@ -371,9 +3518,13 @@ components:
           example: "instructor"
         status:
           type: string
-          enum: [pending, approved, rejected, suspended]
-          description: User's status in the system
+          enum: [pending, approved, rejected]
+          description: User's approval status
           example: "approved"
+        isBlocked:
+          type: boolean
+          description: Whether the user is blocked
+          example: false
         createdAt:
           type: string
           format: date-time
@@ -383,27 +3534,385 @@ components:
           format: date-time
           description: Last update timestamp
 
+    UserResponse:
+      type: object
+      properties:
+        id:
+          type: string
+          example: "64f8a9b2c1234567890abcde"
+        email:
+          type: string
+          example: "john@example.com"
+        username:
+          type: string
+          example: "john_doe"
+        role:
+          type: string
+          example: "student"
+        status:
+          type: string
+          example: "approved"
+
+    Course:
+      type: object
+      properties:
+        _id:
+          type: string
+          description: Course's unique identifier
+          example: "64f8a9b2c1234567890abcde"
+        title:
+          type: string
+          description: Course title
+          example: "Introduction to JavaScript"
+        description:
+          type: string
+          description: Course description
+          example: "Learn the fundamentals of JavaScript programming"
+        thumbnail:
+          type: string
+          description: Course thumbnail image URL
+          example: "https://example.com/thumbnail.jpg"
+        price:
+          type: number
+          description: Course price
+          example: 99.99
+        isPublished:
+          type: boolean
+          description: Whether the course is published
+          example: true
+        isRejected:
+          type: boolean
+          description: Whether the course is rejected
+          example: false
+        instructor:
+          type: string
+          description: Instructor's user ID
+          example: "64f8a9b2c1234567890abcde"
+        status:
+          type: string
+          enum: [pending, approved, rejected]
+          description: Course approval status
+          example: "approved"
+        createdAt:
+          type: string
+          format: date-time
+          description: Course creation timestamp
+        updatedAt:
+          type: string
+          format: date-time
+          description: Last update timestamp
+
+    Lesson:
+      type: object
+      properties:
+        _id:
+          type: string
+          description: Lesson unique identifier
+          example: "64f8a9b2c1234567890abcdf"
+        title:
+          type: string
+          description: Lesson title
+          example: "Introduction to Variables"
+        content:
+          type: string
+          description: Lesson content
+          example: "In this lesson, we'll learn about JavaScript variables."
+        videoUrl:
+          type: string
+          description: Cloudinary URL of lesson video
+          example: "https://res.cloudinary.com/your-cloud-name/video/upload/v1723456789/lessons_videos/video.mp4"
+          nullable: true
+        order:
+          type: integer
+          description: Lesson order in the course
+          example: 1
+        course:
+          type: string
+          description: Course ID this lesson belongs to
+          example: "64f8a9b2c1234567890abcde"
+        createdAt:
+          type: string
+          format: date-time
+          description: Lesson creation timestamp
+          example: "2024-08-23T10:30:00.000Z"
+        updatedAt:
+          type: string
+          format: date-time
+          description: Last lesson update timestamp
+          example: "2024-08-23T10:30:00.000Z"
+
+    LessonProgress:
+      type: object
+      properties:
+        _id:
+          type: string
+          description: Progress record unique identifier
+          example: "64f8a9b2c1234567890abce0"
+        student:
+          type: string
+          description: Student ID
+          example: "64f8a9b2c1234567890abce1"
+        lesson:
+          type: string
+          description: Lesson ID
+          example: "64f8a9b2c1234567890abcdf"
+        course:
+          type: string
+          description: Course ID
+          example: "64f8a9b2c1234567890abcde"
+        completed:
+          type: boolean
+          description: Whether the lesson is completed
+          example: true
+        createdAt:
+          type: string
+          format: date-time
+          description: Progress creation timestamp
+          example: "2024-08-23T10:30:00.000Z"
+        updatedAt:
+          type: string
+          format: date-time
+          description: Last progress update timestamp
+          example: "2024-08-23T10:30:00.000Z"      
+
+    Enrollment:
+      type: object
+      properties:
+        _id:
+          type: string
+          description: Enrollment's unique identifier
+          example: "64f8a9b2c1234567890abcde"
+        student:
+          type: string
+          description: Student's user ID
+          example: "64f8a9b2c1234567890abcde"
+        course:
+          type: string
+          description: Course ID
+          example: "64f8a9b2c1234567890abcde"
+        payment_info:
+          type: object
+          description: Payment information from Stripe
+          properties:
+            paymentId:
+              type: string
+              description: Stripe payment intent ID
+              example: "pi_1234567890abcdef"
+            amount:
+              type: number
+              description: Payment amount
+              example: 99.99
+            currency:
+              type: string
+              description: Payment currency
+              example: "NGN"
+            paymentMethod:
+              type: string
+              description: Payment method used
+              example: "card"
+            status:
+              type: string
+              description: Payment status
+              example: "paid"
+        enrolledAt:
+          type: string
+          format: date-time
+          description: When the student enrolled
+          example: "2023-10-15T14:30:00Z"
+        progress:
+          type: number
+          description: Course completion progress (0-100)
+          example: 0
+        enrollmentDate:
+          type: string
+          format: date-time
+          description: When the student enrolled (alternative field)
+        status:
+          type: string
+          enum: [active, completed, dropped]
+          description: Enrollment status
+          example: "active"
+
+    Review:
+      type: object
+      properties:
+        _id:
+          type: string
+          description: Review's unique identifier
+          example: "64f8a9b2c1234567890abcde"
+        student:
+          type: string
+          description: Student's user ID who wrote the review
+          example: "64f8a9b2c1234567890abcde"
+        course:
+          type: string
+          description: Course ID being reviewed
+          example: "64f8a9b2c1234567890abcde"
+        rating:
+          type: number
+          minimum: 1
+          maximum: 5
+          description: Rating given to the course (1-5)
+          example: 4.5
+        comment:
+          type: string
+          description: Review comment
+          example: "Great course! Very informative."
+        createdAt:
+          type: string
+          format: date-time
+          description: Review creation timestamp
+
+    Student:
+      type: object
+      properties:
+        _id:
+          type: string
+          example: "64a1b2c3d4e5f6789abcdef1"
+        name:
+          type: string
+          example: "John Doe"
+        email:
+          type: string
+          example: "john.doe@example.com"
+        avatar:
+          type: string
+          example: "https://example.com/avatar.jpg"
+
+    EnrollmentResponse:
+      type: object
+      properties:
+        status:
+          type: string
+          example: "success"
+        message:
+          type: string
+          example: "Enrollment confirmed"
+        enrollment:
+          $ref: '#/components/schemas/Enrollment'
+
+    CheckoutSessionResponse:
+      type: object
+      properties:
+        status:
+          type: string
+          example: "success"
+        message:
+          type: string
+          example: "Payment session created"
+        sessionUrl:
+          type: string
+          example: "https://checkout.stripe.com/pay/cs_test_1234567890"
+
+    VerifyPaymentRequest:
+      type: object
+      required:
+        - sessionId
+        - courseId
+      properties:
+        sessionId:
+          type: string
+          example: "cs_test_1234567890abcdef"
+        courseId:
+          type: string
+          example: "64a1b2c3d4e5f6789abcdef2"
+
     ErrorResponse:
       type: object
       properties:
         message:
           type: string
           description: Error message
+          example: "Resource not found"
+        success:
+          type: boolean
+          example: false
+        status:
+          type: string
+          example: "fail"
         error:
           type: string
           description: Detailed error information (optional)
+          example: "User with ID 123 does not exist"
 
-    SuccessResponse:
+    AuthErrorResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+          example: false
+        msg:
+          type: string
+          example: "Invalid Token"
+        message:
+          type: string
+          example: "Forbidden: Access Denied"
+
+    ServerErrorResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+          example: false
+        msg:
+          type: string
+          example: "Server Error"
+        error:
+          type: string
+          example: "Database connection failed"
+
+    InstructorSuccessResponse:
       type: object
       properties:
         message:
           type: string
-          description: Success message
+          example: "Instructor approved Successfully"
         instructor:
           $ref: '#/components/schemas/User'
+
+    StudentSuccessResponse:
+      type: object
+      properties:
+        message:
+          type: string
+          example: "Student blocked Successfully"
+        student:
+          type: object
+          properties:
+            id:
+              type: string
+              example: "64f8a9b2c1234567890abcde"
+            username:
+              type: string
+              example: "john_student"
+            email:
+              type: string
+              example: "student@example.com"
+            role:
+              type: string
+              example: "student"
+            isBlocked:
+              type: boolean
+              example: true
+
+security:
+  - BearerAuth: []
+
 
 tags:
   - name: Authentication
     description: Public authentication endpoints - accessible by all users (no auth required)
   - name: Admin
     description: Admin-only endpoints - requires authentication and admin role
+  - name: Student
+    description: Student-only endpoints -  requires authentication and student role
+  - name: Instructor
+    description: Instructor-only endpoints - requires authentication and instructor role
+  - name: Course
+    description: Course management endpoints - requires authentication
+  - name: Lessons
+    description: Lesson management endpoints - requires authentication
+  - name: Reviews
+    description: Course review endpoints - requires authentication for some operations
+  - name: Enrollments
+    description: Course enrollment endpoints - requires authentication

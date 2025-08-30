@@ -2,13 +2,10 @@ import User from '../models/usersModel.js'
 import bcrypt from 'bcryptjs'
 import jwt from 'jsonwebtoken'
 
-
-// Register a new user
 const registerUser = async (req, res) => {
     try{
         const { name, email, password, role } = req.body
 
-        // chech if user already exists
         const existingUser = await User.findOne({ email})
         if(existingUser){
             return res.status(401).json({
@@ -17,15 +14,13 @@ const registerUser = async (req, res) => {
             })
         }
 
-        // Hash the password
         const hashedPassword = await bcrypt.hash(password, 10)
 
          let status = "pending";
-        if (role === "admin") {
+        if (role === "admin" || role === undefined) {
             status = "approved";
         }
 
-        // create a new user
         const newUser = await User.create({
             name,
             email,
@@ -37,7 +32,6 @@ const registerUser = async (req, res) => {
         return res.status(201).json({
             success: true,
             msg: 'User registered successfully',
-            // token
         })
     }
     catch(err){
@@ -49,13 +43,10 @@ const registerUser = async (req, res) => {
     }
 }
 
-// Login a user
-// Your login controller should look like this:
 const loginUser = async (req, res) => {
   try {
     const { email, password } = req.body
 
-    // Find user
     const user = await User.findOne({ email })
     if (!user) {
       return res.status(401).json({
@@ -64,7 +55,6 @@ const loginUser = async (req, res) => {
       })
     }
 
-    // Verify password (assuming you have password comparison logic)
     const isPasswordValid = await bcrypt.compare(password, user.password)
     if (!isPasswordValid) {
       return res.status(401).json({
@@ -73,22 +63,20 @@ const loginUser = async (req, res) => {
       })
     }
 
-    // 🚨 FIX: Create token with proper user data
     const token = jwt.sign(
       {
         user: {
           id: user._id,
           email: user.email,
           username: user.username,
-          role: user.role,        // 🚨 CRITICAL: Include the role!
+          role: user.role,        
           status: user.status
         }
       },
-      process.env.JWT_SECRET, // Make sure this matches your middleware
-      { expiresIn: '1h' }
+      process.env.JWT_SECRET, 
+      { expiresIn: '7d' }
     )
 
-    // Return success response
     res.status(200).json({
       success: true,
       message: "Login successful",
@@ -113,6 +101,7 @@ const loginUser = async (req, res) => {
 }
 const logoutUser = async(req, res) =>{
     try{
+
 
     }
 
