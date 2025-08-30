@@ -5,8 +5,8 @@ info:
   version: 1.0.0
 
 servers:
-  - url: http://localhost:7777/api/v1
-    description: Local server
+  - url: process.env.BASE_URL || http://localhost:7777/api/v1
+    description: Skillup Api Server
 
 paths:
   # Authentication endpoints - Accessible by ALL users (no auth required)

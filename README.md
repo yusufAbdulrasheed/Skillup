@@ -86,7 +86,7 @@ npm install
 Create a `.env` file in the root directory and add the following:
 
 ```env
-PORT=5000
+PORT=your_port
 MONGO_URI=your_mongodb_connection_string
 JWT_SECRET=your_jwt_secret
 CLIENT_URL=http://localhost:3000
