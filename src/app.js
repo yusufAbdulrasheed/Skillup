@@ -16,11 +16,35 @@ import courseRoute from './routes/courseRoutes.js'
 import lessonRoute from './routes/lessonRoutes.js'
 import reviewRoute from './routes/reviewRoutes.js'
 import enrollmentRoute from './routes/enrollmentRoutes.js'
+import mongoose from 'mongoose'
 
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = path.dirname(__filename)
 
 const app = express()
+
+// Database Connection for Vercel
+let isConnected = false
+
+const connectToDatabase = async () =>{
+    if(isConnected) return
+
+    try{
+        const MongoDB_URI =process.env.MONGODB_CONNECTION_STRING
+
+        await mongoose.connect(MongoDB_URI, {
+            useNewUrlParser: true,
+            useUnifiedTopology: true
+        })
+        isConnected = true
+        console.log('Connected to MongoDB')
+    }
+
+    catch(error){
+        console.error('Error connecting to MongoDB:', error)
+        throw error
+    }
+}
 
 // Swagger setup
 const swaggerDocument = YAML.load(path.join(__dirname, 'doc', 'swagger.yaml'))
@@ -30,6 +54,19 @@ app.use(cors())
 app.use(morgan('dev'))
 app.use(helmet())
 app.use(cookieParser())
+
+// Connect to database before handling requests
+app.use(async (req, res, next) => {
+  try {
+    await connectToDatabase()
+    next()
+  } catch (error) {
+    res.status(500).json({ 
+      success: false, 
+      message: 'Database connection failed' 
+    })
+  }
+})
 
 
 // routes
@@ -42,5 +79,14 @@ app.use('/api/v1/course', courseRoute)
 app.use('/api/v1/lesson', lessonRoute)
 app.use('/api/v1/review', reviewRoute)
 app.use('/api/v1/enrollment', enrollmentRoute)
+
+// Root endpoint
+app.get('/', (req, res) => {
+  res.json({ 
+    message: 'SkillUp API is running!',
+    documentation: '/api-docs',
+    version: '1.0.0'
+  })
+})
 
 export default app

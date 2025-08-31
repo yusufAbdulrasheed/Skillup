@@ -5,10 +5,10 @@
   "main": "server.js",
   "type": "module",
   "scripts": {
-    "start": "node src/server.js",
-    "dev": "nodemon src/server.js",
-    "lint": "eslint . --ext .js",
-    "test": "jest"
+    "start": "node server.js",
+    "dev": "node server.js",
+    "vercel": "vercel",
+    "vercel-build": "echo 'Build step completed'"
   },
   "author": "Abdulrasheed Yusuf",
   "license": "ISC",

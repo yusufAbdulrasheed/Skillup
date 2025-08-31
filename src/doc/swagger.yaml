@@ -5,8 +5,10 @@ info:
   version: 1.0.0
 
 servers:
-  - url: process.env.BASE_URL || http://localhost:7777/api/v1
-    description: Skillup Api Server
+  - url: http://localhost:7777/api/v1
+    description: Local Skillup Api Server
+  - url: https://skillup-api.vercel.app/api
+    description: Production Skillup server
 
 paths:
   # Authentication endpoints - Accessible by ALL users (no auth required)
