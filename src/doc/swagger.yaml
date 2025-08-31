@@ -7,7 +7,7 @@ info:
 servers:
   - url: http://localhost:7777/api/v1
     description: Local Skillup Api Server
-  - url: https://skillup-api.vercel.app/api
+  - url: https://skillup-tau.vercel.app/api/v1
     description: Production Skillup server
 
 paths:
