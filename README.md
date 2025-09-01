@@ -165,7 +165,7 @@ npm test
 ## 📜 Logging
 
 - **Morgan** → HTTP request logging (development)
-- **Winston** → Advanced logging for errors & monitoring
+
 
 ---
 
@@ -173,16 +173,10 @@ npm test
 
 | Package                | Purpose                                         |
 | ---------------------- | ----------------------------------------------- |
-| **bullmq**             | Manage background jobs like email notifications |
 | **cookie-parser**      | Parse cookies from requests                     |
 | **cors**               | Enable cross-origin requests                    |
 | **express-rate-limit** | Limit API requests to prevent abuse             |
 | **helmet**             | Secure HTTP headers                             |
-| **joi**                | Schema validation for request data              |
-| **morgan**             | HTTP request logging                            |
-| **redis**              | Caching & queue processing                      |
-| **socket.io**          | Real-time notifications                         |
-| **winston**            | Structured logging for production               |
 
 ---
 
@@ -194,12 +188,6 @@ Backend Developer | Node.js | Express | MongoDB
 - 📧 Email: [yusufabdulrasheed200@gmail.com](mailto:yusufabdulrasheed200@gmail.com)
 - 🌐 Portfolio: [http://abdulrasheedyusuf.vercel.app/](http://abdulrasheedyusuf.vercel.app/)
 - 🐙 GitHub: [https://github.com/yusufAbdulrasheed](https://github.com/yusufAbdulrasheed)
-
----
-
-## 📄 License
-
-This project is licensed under the **MIT License** – you're free to use, modify, and distribute it.
 
 ---
 
